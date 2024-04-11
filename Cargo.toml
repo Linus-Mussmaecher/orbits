@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 coffee = {version = "0.4.1", features = ["opengl"]}
+rayon = "^1.10"
+nalgebra = "^0.18"

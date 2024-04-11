@@ -1277,6 +1277,8 @@ name = "orbits"
 version = "0.1.0"
 dependencies = [
  "coffee",
+ "nalgebra",
+ "rayon",
 ]
 
 [[package]]
