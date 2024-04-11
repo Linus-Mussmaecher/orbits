@@ -20,7 +20,7 @@ struct OrbitsInstance {
 impl OrbitsInstance {
     const GRAVITY: f32 = 1.0;
     const ROT_ACCELERATION: f32 = 0.1;
-    const LIN_ACCELARATION: f32 = 0.001;
+    const LIN_ACCELARATION: f32 = 0.02;
 }
 
 impl Game for OrbitsInstance {
@@ -36,18 +36,18 @@ impl Game for OrbitsInstance {
             objects: vec![
                 // Ship
                 SpaceObject {
-                    position: Point::from([128.0, 0.0]),
+                    position: Point::from([256.0, 0.0]),
                     velocity: Vector::from([0.0, 2.0]),
-                    direction: Vector::from([Self::LIN_ACCELARATION, 0.0]),
+                    angle: 0.0,
                     mass: 1.0,
                     sprite: ship,
-                    size: 8.0,
+                    size: 16.0,
                 },
                 // Sun
                 SpaceObject {
                     position: Point::from([0.0, 0.0]),
                     velocity: Vector::zeros(),
-                    direction: Vector::zeros(),
+                    angle: 0.0,
                     mass: 1024.0,
                     sprite: sun,
                     size: 96.0,
@@ -65,16 +65,16 @@ impl Game for OrbitsInstance {
         if let Some(ship) = self.objects.first_mut() {
             // Accelerate when W is pressed
             if input.is_key_pressed(keyboard::KeyCode::W) {
-                ship.velocity += ship.direction;
+                ship.velocity += nalgebra::Rotation2::new(ship.angle)
+                    .transform_vector(&Vector::x())
+                    * Self::LIN_ACCELARATION;
             }
             // Turn with A/D
             if input.is_key_pressed(keyboard::KeyCode::A) {
-                let rot = nalgebra::Rotation2::new(Self::ROT_ACCELERATION);
-                ship.direction = rot.transform_vector(&ship.direction);
+                ship.angle += Self::ROT_ACCELERATION;
             }
             if input.is_key_pressed(keyboard::KeyCode::D) {
-                let rot = nalgebra::Rotation2::new(-Self::ROT_ACCELERATION);
-                ship.direction = rot.transform_vector(&ship.direction);
+                ship.angle -= Self::ROT_ACCELERATION;
             }
         }
     }
@@ -112,29 +112,50 @@ impl Game for OrbitsInstance {
 
         // Get weighted average position
         let mut total_mass = 0.0;
-        let mut pos = Vector::zeros();
+        let mut center = Vector::zeros();
 
         for object in self.objects.iter() {
-            pos -= object.mass * object.position.to_homogeneous().xy();
+            center -= object.mass * object.position.to_homogeneous().xy();
             total_mass += object.mass;
         }
 
-        pos /= total_mass;
+        center /= total_mass;
 
-        pos += Vector::from([frame.width() / 2., frame.height() / 2.]);
+        center += Vector::from([frame.width() / 2., frame.height() / 2.]);
+
+        let mut min_scale: f32 = 1.0;
+
+        let (w, h) = (frame.width(), frame.height());
+
+        for object in self.objects.iter() {
+            let w_scale = (object.position.x - center.x).abs() / w * 5.0;
+            let h_scale = (object.position.y - center.y).abs() / h * 5.0;
+
+            dbg!(w_scale);
+            dbg!(h_scale);
+            dbg!(min_scale);
+
+            min_scale = min_scale.max(w_scale).max(h_scale);
+        }
 
         let mut target = frame.as_target();
-
-        let mut target = target.transform(graphics::Transformation::translate(pos));
 
         for object in self.objects.iter() {
             object.sprite.draw(
                 graphics::Quad {
-                    position: object.position - Vector::from([object.size / 2., object.size / 2.]),
                     size: (object.size, object.size),
                     ..Default::default()
                 },
-                &mut target,
+                &mut target
+                    .transform(graphics::Transformation::translate(center))
+                    .transform(graphics::Transformation::translate(
+                        object.position.to_homogeneous().xy(),
+                    ))
+                    .transform(graphics::Transformation::rotate(object.angle))
+                    .transform(graphics::Transformation::translate(Vector::from([
+                        -object.size / 2.,
+                        -object.size / 2.,
+                    ]))),
             );
         }
     }
@@ -144,7 +165,7 @@ impl Game for OrbitsInstance {
 struct SpaceObject {
     position: Point,
     velocity: Vector,
-    direction: Vector,
+    angle: f32,
     mass: f32,
     size: f32,
     sprite: graphics::Image,
