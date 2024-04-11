@@ -58,6 +58,25 @@ impl Game for OrbitsInstance {
                         ],
                     }),
                 },
+                // Ship
+                SpaceObject {
+                    position: Point::from([-256.0, 0.0]),
+                    velocity: Vector::from([0.0, -0.6]),
+                    angle: 0.0,
+                    mass: 1.0,
+                    sprite: ship.clone(),
+                    size: 16.0,
+                    ship: Some(ShipInfo {
+                        shot_cd: 0.0,
+                        fuel: 1.0,
+                        keymap: [
+                            keyboard::KeyCode::I,
+                            keyboard::KeyCode::J,
+                            keyboard::KeyCode::L,
+                            keyboard::KeyCode::K,
+                        ],
+                    }),
+                },
                 // Sun
                 SpaceObject {
                     position: Point::from([0.0, 0.0]),
