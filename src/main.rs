@@ -138,9 +138,19 @@ impl Game for OrbitsInstance {
             object.perform_movement(Some(force));
         }
 
+        // Now check for collisions
+        for i in 0..self.objects.len() {
+            for j in (i + 1)..self.objects.len() {
+                let (left, right) = self.objects.split_at_mut(j);
+                left[i].collide(&mut right[0]);
+            }
+        }
+
         // Delete all objects too far from the origin
-        self.objects
-            .retain(|object| (object.get_position().to_homogeneous().xy()).norm() <= 1000.)
+        self.objects.retain(|object| {
+            (object.get_position().to_homogeneous().xy()).norm() <= 1000.
+                && object.collisions_left()
+        })
     }
 
     fn draw(&mut self, frame: &mut Frame, _timer: &Timer) {

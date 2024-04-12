@@ -18,6 +18,8 @@ pub struct SpaceObject {
     sprite: graphics::Image,
     /// If the objects is a controllable space ship, this contains the ships special properties.
     ship: Option<ShipInfo>,
+    /// Amount of collisions with other objects this one can survive
+    collisions: Option<u8>,
 }
 
 /// Describes properties of a space object that is also a ship.
@@ -50,6 +52,7 @@ impl SpaceObject {
                 shot_cd: 0.0,
                 keymap,
             }),
+            collisions: Some(3),
         }
     }
 
@@ -69,6 +72,7 @@ impl SpaceObject {
             size,
             sprite: image,
             ship: None,
+            collisions: None,
         }
     }
 
@@ -114,7 +118,7 @@ impl SpaceObject {
                     position: self.position
                         + nalgebra::Rotation2::new(self.angle).transform_vector(&Vector::x())
                             * self.size
-                            / 2.,
+                            / 1.5,
                     velocity: self.velocity
                         + nalgebra::Rotation2::new(self.angle).transform_vector(&Vector::x()) * 0.8,
                     angle: self.angle,
@@ -122,6 +126,7 @@ impl SpaceObject {
                     size: 4.0,
                     sprite: images[2].clone(),
                     ship: None,
+                    collisions: Some(1),
                 });
                 ship_info.shot_cd = 1.0;
             }
@@ -175,5 +180,26 @@ impl SpaceObject {
     /// The objects mass.
     pub fn get_mass(&self) -> f32 {
         self.mass
+    }
+
+    /// Checks if this element collides with the other object, and if yes, registers a collision on this object, reducing its allowed collisions by 1 if present.
+    pub fn collide(&mut self, other: &mut SpaceObject) {
+        if (self.position - other.position).norm() * 2. < self.size + other.size {
+            if let Some(c) = &mut self.collisions {
+                *c -= 1;
+            }
+            if let Some(c) = &mut other.collisions {
+                *c -= 1;
+            }
+        }
+    }
+
+    /// Returns wether this element can still survive collisions, i.e.
+    pub fn collisions_left(&self) -> bool {
+        if let Some(c) = self.collisions {
+            c > 0
+        } else {
+            true
+        }
     }
 }
