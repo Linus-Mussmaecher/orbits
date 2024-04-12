@@ -3,6 +3,9 @@ use coffee::input::keyboard;
 use coffee::load::Task;
 use coffee::{Game, Result, Timer};
 
+mod space_object;
+use space_object::SpaceObject;
+
 fn main() -> Result<()> {
     OrbitsInstance::run(WindowSettings {
         title: String::from("Orbits"),
@@ -13,18 +16,18 @@ fn main() -> Result<()> {
     })
 }
 
+/// An instance of the simulation.
 struct OrbitsInstance {
+    /// All objects being simulated.
     objects: Vec<SpaceObject>,
+    /// The current scale of the camera.
     scale: f32,
-    ship_image: graphics::Image,
-    ship_power_image: graphics::Image,
-    sun_image: graphics::Image,
+    /// Selection of cached images.
+    image_cache: Vec<graphics::Image>,
 }
 
 impl OrbitsInstance {
     const GRAVITY: f32 = 0.1;
-    const ROT_ACCELERATION: f32 = 0.05;
-    const LIN_ACCELARATION: f32 = 0.001;
 }
 
 impl Game for OrbitsInstance {
@@ -32,6 +35,7 @@ impl Game for OrbitsInstance {
     type LoadingScreen = coffee::load::loading_screen::ProgressBar;
 
     fn load(_window: &Window) -> Task<OrbitsInstance> {
+        // Load the three images used for entities.
         coffee::load::Join::join((
             graphics::Image::load("./assets/sun.png"),
             graphics::Image::load("./assets/ship.png"),
@@ -39,59 +43,40 @@ impl Game for OrbitsInstance {
         ))
         .map(|(sun, ship, ship_power)| OrbitsInstance {
             objects: vec![
-                // Ship
-                SpaceObject {
-                    position: Point::from([256.0, 0.0]),
-                    velocity: Vector::from([0.0, 0.6]),
-                    angle: 0.0,
-                    mass: 1.0,
-                    sprite: ship.clone(),
-                    size: 16.0,
-                    ship: Some(ShipInfo {
-                        shot_cd: 0.0,
-                        fuel: 1.0,
-                        keymap: [
-                            keyboard::KeyCode::W,
-                            keyboard::KeyCode::A,
-                            keyboard::KeyCode::D,
-                            keyboard::KeyCode::S,
-                        ],
-                    }),
-                },
-                // Ship
-                SpaceObject {
-                    position: Point::from([-256.0, 0.0]),
-                    velocity: Vector::from([0.0, -0.6]),
-                    angle: 0.0,
-                    mass: 1.0,
-                    sprite: ship.clone(),
-                    size: 16.0,
-                    ship: Some(ShipInfo {
-                        shot_cd: 0.0,
-                        fuel: 1.0,
-                        keymap: [
-                            keyboard::KeyCode::I,
-                            keyboard::KeyCode::J,
-                            keyboard::KeyCode::L,
-                            keyboard::KeyCode::K,
-                        ],
-                    }),
-                },
+                // Ships
+                SpaceObject::ship(
+                    Point::from([256.0, 0.0]),
+                    Vector::from([0.0, 0.6]),
+                    ship.clone(),
+                    [
+                        keyboard::KeyCode::W,
+                        keyboard::KeyCode::A,
+                        keyboard::KeyCode::D,
+                        keyboard::KeyCode::S,
+                    ],
+                ),
+                SpaceObject::ship(
+                    Point::from([-256.0, 0.0]),
+                    Vector::from([0.0, -0.6]),
+                    ship.clone(),
+                    [
+                        keyboard::KeyCode::I,
+                        keyboard::KeyCode::J,
+                        keyboard::KeyCode::L,
+                        keyboard::KeyCode::K,
+                    ],
+                ),
                 // Sun
-                SpaceObject {
-                    position: Point::from([0.0, 0.0]),
-                    velocity: Vector::zeros(),
-                    angle: 0.0,
-                    mass: 1024.0,
-                    sprite: sun.clone(),
-                    size: 96.0,
-                    ship: None,
-                },
+                SpaceObject::body(
+                    Point::from([0.0, 0.0]),
+                    Vector::zeros(),
+                    1024.,
+                    96.,
+                    sun.clone(),
+                ),
             ],
             scale: 1.0,
-            ship_image: ship,
-            ship_power_image: ship_power,
-            sun_image: sun,
+            image_cache: vec![ship, ship_power, sun],
         })
     }
 
@@ -103,47 +88,13 @@ impl Game for OrbitsInstance {
 
         let mut shots = Vec::new();
 
-        for possible_ship in self.objects.iter_mut() {
-            if possible_ship.ship.is_some() {
-                let ship = possible_ship;
-                let ship_info = ship.ship.as_mut().unwrap();
-                // Accelerate when W is pressed
-                if input.is_key_pressed(ship_info.keymap[0]) {
-                    ship.velocity += nalgebra::Rotation2::new(ship.angle)
-                        .transform_vector(&Vector::x())
-                        * Self::LIN_ACCELARATION;
-                    ship.sprite = self.ship_power_image.clone();
-                } else {
-                    ship.sprite = self.ship_image.clone();
-                }
-                // Turn with A/D
-                if input.is_key_pressed(ship_info.keymap[1]) {
-                    ship.angle += Self::ROT_ACCELERATION;
-                }
-                if input.is_key_pressed(ship_info.keymap[2]) {
-                    ship.angle -= Self::ROT_ACCELERATION;
-                }
-                // Shoot with S
-                if ship_info.shot_cd <= 0.0 {
-                    if input.is_key_pressed(ship_info.keymap[3]) {
-                        shots.push(SpaceObject {
-                            position: ship.position + 5.0 * ship.velocity,
-                            velocity: ship.velocity
-                                + nalgebra::Rotation2::new(ship.angle)
-                                    .transform_vector(&Vector::x())
-                                    * 0.8,
-                            angle: ship.angle,
-                            mass: 0.01,
-                            size: 4.0,
-                            sprite: self.sun_image.clone(),
-                            ship: None,
-                        });
-                        ship_info.shot_cd = 1.0;
-                    }
-                } else {
-                    ship_info.shot_cd = (ship_info.shot_cd - 0.01).max(0.0);
-                }
-            }
+        // Go over all ships and check for their contollers
+        for ship in self
+            .objects
+            .iter_mut()
+            .filter(|possible_ship| possible_ship.is_ship())
+        {
+            shots.extend(ship.interact(&input, &self.image_cache));
         }
 
         self.objects.extend(shots);
@@ -151,32 +102,41 @@ impl Game for OrbitsInstance {
 
     fn update(&mut self, _window: &Window) {
         // For every object, calculate the gravitational influence of all other objects on it.
-        let accelerations = self
+        let forces = self
             .objects
             .iter()
             .map(|object| {
-                let mut a = Vector::zeros();
+                // For every object...
+                let mut f = Vector::zeros();
 
+                // Go over every other object
                 for attractor in self.objects.iter() {
-                    let dist = attractor.position - object.position;
+                    // Get the distance vector between the two
+                    let dist = attractor.get_position() - object.get_position();
+                    // If they have are not in the same space, generate a force.
+                    // Prevents division by zero and an object attracting itself.
                     if dist.norm() != 0.0 {
-                        a += dist.normalize() * Self::GRAVITY * object.mass * attractor.mass
+                        // The gravitational force between the two is in the direction of the distance vector, proportional to their masses and inversely proportional to the square of the distance vectors length.
+                        f += dist.normalize()
+                            * Self::GRAVITY
+                            * object.get_mass()
+                            * attractor.get_mass()
                             / dist.norm_squared();
                     }
                 }
 
-                a
+                f
             })
             .collect::<Vec<_>>();
 
         // Then apply accelerations and velocities.
-        for (object, accleration) in self.objects.iter_mut().zip(accelerations.iter()) {
-            object.velocity += accleration / object.mass;
-            object.position += object.velocity;
+        for (object, &force) in self.objects.iter_mut().zip(forces.iter()) {
+            object.perform_movement(Some(force));
         }
 
+        // Delete all objects too far from the origin
         self.objects
-            .retain(|object| (object.position.to_homogeneous().xy()).norm() <= 1000.)
+            .retain(|object| (object.get_position().to_homogeneous().xy()).norm() <= 1000.)
     }
 
     fn draw(&mut self, frame: &mut Frame, _timer: &Timer) {
@@ -187,9 +147,9 @@ impl Game for OrbitsInstance {
 
         let (w, h) = (frame.width(), frame.height());
 
-        for object in self.objects.iter().filter(|obj| obj.ship.is_some()) {
-            let w_scale = object.position.x.abs() / w * 2.2;
-            let h_scale = object.position.y.abs() / h * 2.2;
+        for object in self.objects.iter().filter(|obj| obj.is_ship()) {
+            let w_scale = object.get_position().x.abs() / w * 2.2;
+            let h_scale = object.get_position().y.abs() / h * 2.2;
 
             min_scale = min_scale.max(w_scale).max(h_scale);
         }
@@ -201,44 +161,17 @@ impl Game for OrbitsInstance {
         let mut target = frame.as_target();
 
         for object in self.objects.iter() {
-            object.sprite.draw(
-                graphics::Quad {
-                    size: (object.size, object.size),
-                    ..Default::default()
-                },
+            object.draw(
                 &mut target
+                    // Move (0/0) to the center of the camera
                     .transform(graphics::Transformation::translate(Vector::from([
                         w / 2.,
                         h / 2.,
                     ])))
-                    .transform(graphics::Transformation::scale(1. / self.scale))
-                    .transform(graphics::Transformation::translate(
-                        object.position.to_homogeneous().xy(),
-                    ))
-                    .transform(graphics::Transformation::rotate(object.angle))
-                    .transform(graphics::Transformation::translate(Vector::from([
-                        -object.size / 2.,
-                        -object.size / 2.,
-                    ]))),
+                    // Scale so that all objects are in view
+                    .transform(graphics::Transformation::scale(1. / self.scale)),
+                // All further transformations are object-specific
             );
         }
     }
-}
-
-#[derive(Debug, Clone)]
-struct SpaceObject {
-    position: Point,
-    velocity: Vector,
-    angle: f32,
-    mass: f32,
-    size: f32,
-    sprite: graphics::Image,
-    ship: Option<ShipInfo>,
-}
-
-#[derive(Debug, Clone)]
-struct ShipInfo {
-    shot_cd: f32,
-    fuel: f32,
-    keymap: [keyboard::KeyCode; 4],
 }
