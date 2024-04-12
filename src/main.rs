@@ -37,47 +37,51 @@ impl Game for OrbitsInstance {
     fn load(_window: &Window) -> Task<OrbitsInstance> {
         // Load the three images used for entities.
         coffee::load::Join::join((
-            graphics::Image::load("./assets/sun.png"),
             graphics::Image::load("./assets/ship.png"),
             graphics::Image::load("./assets/ship_power.png"),
+            graphics::Image::load("./assets/projectile.png"),
+            graphics::Image::load("./assets/sun.png"),
+            graphics::Image::load("./assets/earth.png"),
         ))
-        .map(|(sun, ship, ship_power)| OrbitsInstance {
-            objects: vec![
-                // Ships
-                SpaceObject::ship(
-                    Point::from([256.0, 0.0]),
-                    Vector::from([0.0, 0.6]),
-                    ship.clone(),
-                    [
-                        keyboard::KeyCode::W,
-                        keyboard::KeyCode::A,
-                        keyboard::KeyCode::D,
-                        keyboard::KeyCode::S,
-                    ],
-                ),
-                SpaceObject::ship(
-                    Point::from([-256.0, 0.0]),
-                    Vector::from([0.0, -0.6]),
-                    ship.clone(),
-                    [
-                        keyboard::KeyCode::I,
-                        keyboard::KeyCode::J,
-                        keyboard::KeyCode::L,
-                        keyboard::KeyCode::K,
-                    ],
-                ),
-                // Sun
-                SpaceObject::body(
-                    Point::from([0.0, 0.0]),
-                    Vector::zeros(),
-                    1024.,
-                    96.,
-                    sun.clone(),
-                ),
-            ],
-            scale: 1.0,
-            image_cache: vec![ship, ship_power, sun],
-        })
+        .map(
+            |(ship, ship_power, projectile, sun, earth)| OrbitsInstance {
+                objects: vec![
+                    // Ships
+                    SpaceObject::ship(
+                        Point::from([256.0, 0.0]),
+                        Vector::from([0.0, 0.6]),
+                        ship.clone(),
+                        [
+                            keyboard::KeyCode::W,
+                            keyboard::KeyCode::A,
+                            keyboard::KeyCode::D,
+                            keyboard::KeyCode::S,
+                        ],
+                    ),
+                    SpaceObject::ship(
+                        Point::from([-256.0, 0.0]),
+                        Vector::from([0.0, -0.6]),
+                        ship.clone(),
+                        [
+                            keyboard::KeyCode::I,
+                            keyboard::KeyCode::J,
+                            keyboard::KeyCode::L,
+                            keyboard::KeyCode::K,
+                        ],
+                    ),
+                    // Sun
+                    SpaceObject::body(
+                        Point::from([0.0, 0.0]),
+                        Vector::zeros(),
+                        1024.,
+                        96.,
+                        sun.clone(),
+                    ),
+                ],
+                scale: 1.0,
+                image_cache: vec![ship, ship_power, projectile, sun, earth],
+            },
+        )
     }
 
     fn interact(&mut self, input: &mut Self::Input, window: &mut Window) {
@@ -143,7 +147,7 @@ impl Game for OrbitsInstance {
         // Clear the current frame
         frame.clear(graphics::Color::BLACK);
 
-        let mut min_scale: f32 = 1.0;
+        let mut min_scale: f32 = 0.1;
 
         let (w, h) = (frame.width(), frame.height());
 

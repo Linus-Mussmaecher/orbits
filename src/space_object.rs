@@ -111,7 +111,10 @@ impl SpaceObject {
         if input.is_key_pressed(ship_info.keymap[3]) {
             if ship_info.shot_cd <= 0.0 {
                 spawns.push(SpaceObject {
-                    position: self.position + 5.0 * self.velocity,
+                    position: self.position
+                        + nalgebra::Rotation2::new(self.angle).transform_vector(&Vector::x())
+                            * self.size
+                            / 2.,
                     velocity: self.velocity
                         + nalgebra::Rotation2::new(self.angle).transform_vector(&Vector::x()) * 0.8,
                     angle: self.angle,
