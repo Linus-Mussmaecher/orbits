@@ -157,19 +157,15 @@ impl Game for OrbitsInstance {
         // Clear the current frame
         frame.clear(graphics::Color::BLACK);
 
-        let mut min_scale: f32 = 0.1;
-
         let (w, h) = (frame.width(), frame.height());
+
+        self.scale = 0.5;
 
         for object in self.objects.iter().filter(|obj| obj.is_ship()) {
             let w_scale = object.get_position().x.abs() / w * 2.2;
             let h_scale = object.get_position().y.abs() / h * 2.2;
 
-            min_scale = min_scale.max(w_scale).max(h_scale);
-        }
-
-        if min_scale > self.scale || min_scale < self.scale / 2. {
-            self.scale = min_scale;
+            self.scale = self.scale.max(w_scale).max(h_scale);
         }
 
         let mut target = frame.as_target();

@@ -182,7 +182,7 @@ impl SpaceObject {
         self.mass
     }
 
-    /// Checks if this element collides with the other object, and if yes, registers a collision on this object, reducing its allowed collisions by 1 if present.
+    /// Checks if this object collides with the other object, and if yes, registers a collision on both objects, reducing their allowed collisions by 1 if present.
     pub fn collide(&mut self, other: &mut SpaceObject) {
         if (self.position - other.position).norm() * 2. < self.size + other.size {
             if let Some(c) = &mut self.collisions {
