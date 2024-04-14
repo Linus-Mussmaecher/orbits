@@ -1,19 +1,22 @@
-use coffee::graphics::{self, Frame, Point, Vector, Window, WindowSettings};
-use coffee::input::keyboard;
-use coffee::load::Task;
-use coffee::{Game, Result, Timer};
+use macroquad::prelude::*;
 
 mod space_object;
 use space_object::SpaceObject;
 
-fn main() -> Result<()> {
-    OrbitsInstance::run(WindowSettings {
-        title: String::from("Orbits"),
-        size: (1280, 1024),
-        resizable: true,
-        fullscreen: false,
-        maximized: false,
-    })
+#[macroquad::main("Orbits")]
+async fn main() {
+    let mut instance = OrbitsInstance::new().unwrap();
+
+    loop {
+        // Read user input and process it
+        instance.interact();
+        // Run physics updates
+        instance.update();
+        // Draw the game to the frame
+        instance.draw();
+
+        next_frame().await
+    }
 }
 
 /// An instance of the simulation.
@@ -23,71 +26,74 @@ struct OrbitsInstance {
     /// The current scale of the camera.
     scale: f32,
     /// Selection of cached images.
-    image_cache: Vec<graphics::Image>,
+    image_cache: Vec<Image>,
 }
 
 impl OrbitsInstance {
+    /// The gravitic constant governing the attraction of space objects to one another
     const GRAVITY: f32 = 0.1;
-}
 
-impl Game for OrbitsInstance {
-    type Input = coffee::input::Keyboard;
-    type LoadingScreen = coffee::load::loading_screen::ProgressBar;
-
-    fn load(_window: &Window) -> Task<OrbitsInstance> {
-        // Load the three images used for entities.
-        coffee::load::Join::join((
-            graphics::Image::load("./assets/ship.png"),
-            graphics::Image::load("./assets/ship_power.png"),
-            graphics::Image::load("./assets/projectile.png"),
-            graphics::Image::load("./assets/sun.png"),
-            graphics::Image::load("./assets/earth.png"),
-        ))
-        .map(
-            |(ship, ship_power, projectile, sun, earth)| OrbitsInstance {
-                objects: vec![
-                    // Ships
-                    SpaceObject::ship(
-                        Point::from([256.0, 0.0]),
-                        Vector::from([0.0, 0.6]),
-                        ship.clone(),
-                        [
-                            keyboard::KeyCode::W,
-                            keyboard::KeyCode::A,
-                            keyboard::KeyCode::D,
-                            keyboard::KeyCode::S,
-                        ],
-                    ),
-                    SpaceObject::ship(
-                        Point::from([-256.0, 0.0]),
-                        Vector::from([0.0, -0.6]),
-                        ship.clone(),
-                        [
-                            keyboard::KeyCode::I,
-                            keyboard::KeyCode::J,
-                            keyboard::KeyCode::L,
-                            keyboard::KeyCode::K,
-                        ],
-                    ),
-                    // Sun
-                    SpaceObject::body(
-                        Point::from([0.0, 0.0]),
-                        Vector::zeros(),
-                        1024.,
-                        96.,
-                        sun.clone(),
-                    ),
-                ],
-                scale: 1.0,
-                image_cache: vec![ship, ship_power, projectile, sun, earth],
-            },
-        )
+    /// Creates a new instance of the simulation
+    fn new() -> Result<Self, macroquad::Error> {
+        let image_cache = vec![
+            Image::from_file_with_format(
+                include_bytes!("../assets/ship.png"),
+                Some(ImageFormat::Png),
+            )?,
+            Image::from_file_with_format(
+                include_bytes!("../assets/ship_power.png"),
+                Some(ImageFormat::Png),
+            )?,
+            Image::from_file_with_format(
+                include_bytes!("../assets/projectile.png"),
+                Some(ImageFormat::Png),
+            )?,
+            Image::from_file_with_format(
+                include_bytes!("../assets/sun.png"),
+                Some(ImageFormat::Png),
+            )?,
+            Image::from_file_with_format(
+                include_bytes!("../assets/earth.png"),
+                Some(ImageFormat::Png),
+            )?,
+        ];
+        Ok(OrbitsInstance {
+            objects: vec![
+                // Ships
+                SpaceObject::ship(
+                    Vec2::new(256.0, 0.0),
+                    Vec2::new(0.0, 0.6),
+                    image_cache[0].clone(),
+                    [KeyCode::W, KeyCode::A, KeyCode::D, KeyCode::S],
+                ),
+                SpaceObject::ship(
+                    Vec2::new(-256.0, 0.0),
+                    Vec2::new(0.0, -0.6),
+                    image_cache[0].clone(),
+                    [KeyCode::I, KeyCode::J, KeyCode::L, KeyCode::K],
+                ),
+                // Sun
+                SpaceObject::body(
+                    Vec2::new(0.0, 0.0),
+                    Vec2::new(0.0, 0.0),
+                    1024.,
+                    96.,
+                    image_cache[3].clone(),
+                ),
+            ],
+            scale: 1.0,
+            image_cache,
+        })
     }
 
-    fn interact(&mut self, input: &mut Self::Input, window: &mut Window) {
+    /// Reads user input and lets it act on the simulation.
+    fn interact(&mut self) {
         // Screen interaction
-        if input.was_key_released(keyboard::KeyCode::F11) {
-            window.toggle_fullscreen();
+        if is_key_released(KeyCode::F11) {
+            set_fullscreen(true);
+        }
+        if is_key_released(KeyCode::Escape) {
+            set_fullscreen(false);
         }
 
         let mut shots = Vec::new();
@@ -98,20 +104,21 @@ impl Game for OrbitsInstance {
             .iter_mut()
             .filter(|possible_ship| possible_ship.is_ship())
         {
-            shots.extend(ship.interact(&input, &self.image_cache));
+            shots.extend(ship.interact(&self.image_cache));
         }
 
         self.objects.extend(shots);
     }
 
-    fn update(&mut self, _window: &Window) {
+    /// Performs physics updates such as gravity & collision on the simulation.
+    fn update(&mut self) {
         // For every object, calculate the gravitational influence of all other objects on it.
         let forces = self
             .objects
             .iter()
             .map(|object| {
                 // For every object...
-                let mut f = Vector::zeros();
+                let mut f = Vec2::ZERO;
 
                 // Go over every other object
                 for attractor in self.objects.iter() {
@@ -119,13 +126,13 @@ impl Game for OrbitsInstance {
                     let dist = attractor.get_position() - object.get_position();
                     // If they have are not in the same space, generate a force.
                     // Prevents division by zero and an object attracting itself.
-                    if dist.norm() != 0.0 {
+                    if dist.length() != 0.0 {
                         // The gravitational force between the two is in the direction of the distance vector, proportional to their masses and inversely proportional to the square of the distance vectors length.
                         f += dist.normalize()
                             * Self::GRAVITY
                             * object.get_mass()
                             * attractor.get_mass()
-                            / dist.norm_squared();
+                            / dist.length_squared();
                     }
                 }
 
@@ -147,41 +154,34 @@ impl Game for OrbitsInstance {
         }
 
         // Delete all objects too far from the origin
-        self.objects.retain(|object| {
-            (object.get_position().to_homogeneous().xy()).norm() <= 1000.
-                && object.collisions_left()
-        })
+        self.objects
+            .retain(|object| object.get_position().length() <= 1000. && object.collisions_left())
     }
 
-    fn draw(&mut self, frame: &mut Frame, _timer: &Timer) {
+    /// Draws the current state to the screen.
+    fn draw(&mut self) {
         // Clear the current frame
-        frame.clear(graphics::Color::BLACK);
+        clear_background(BLACK);
 
-        let (w, h) = (frame.width(), frame.height());
+        let (w, h) = (screen_width(), screen_height());
 
         self.scale = 0.5;
 
         for object in self.objects.iter().filter(|obj| obj.is_ship()) {
-            let w_scale = object.get_position().x.abs() / w * 2.2;
-            let h_scale = object.get_position().y.abs() / h * 2.2;
+            let w_scale = object.get_position().x.abs() / w * 2.0;
+            let h_scale = object.get_position().y.abs() / h * 2.0;
 
             self.scale = self.scale.max(w_scale).max(h_scale);
         }
 
-        let mut target = frame.as_target();
+        set_camera(&Camera2D {
+            target: Vec2::new(0.0, 0.0),
+            zoom: Vec2::new(1. / w, 1. / h) / self.scale * 1.5,
+            ..Default::default()
+        });
 
         for object in self.objects.iter() {
-            object.draw(
-                &mut target
-                    // Move (0/0) to the center of the camera
-                    .transform(graphics::Transformation::translate(Vector::from([
-                        w / 2.,
-                        h / 2.,
-                    ])))
-                    // Scale so that all objects are in view
-                    .transform(graphics::Transformation::scale(1. / self.scale)),
-                // All further transformations are object-specific
-            );
+            object.draw();
         }
     }
 }

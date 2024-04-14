@@ -6,6 +6,4 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-coffee = {version = "0.4.1", features = ["opengl"]}
-rayon = "^1.10"
-nalgebra = "^0.18"
+macroquad = "0.4.5"
