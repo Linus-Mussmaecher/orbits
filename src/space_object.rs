@@ -14,7 +14,7 @@ pub struct SpaceObject {
     /// The size of the object, determining its collision and appearance.
     size: f32,
     /// The image drawn to represent the object.
-    sprite: Image,
+    sprite: Texture2D,
     /// If the objects is a controllable space ship, this contains the ships special properties.
     ship: Option<ShipInfo>,
     /// Amount of collisions with other objects this one can survive
@@ -34,14 +34,14 @@ impl SpaceObject {
     const ROT_ACCELERATION: f32 = 0.05;
     const LIN_ACCELARATION: f32 = 0.001;
     /// Creates a new space objects describing a ship
-    pub fn ship(position: Vec2, velocity: Vec2, ship_image: Image, keymap: [KeyCode; 4]) -> Self {
+    pub fn ship(position: Vec2, velocity: Vec2, ship_image: &Image, keymap: [KeyCode; 4]) -> Self {
         Self {
             position,
             velocity,
             angle: 0.0,
             mass: 1.0,
             size: 16.0,
-            sprite: ship_image,
+            sprite: Texture2D::from_image(ship_image),
             ship: Some(ShipInfo {
                 shot_cd: 0.0,
                 keymap,
@@ -51,14 +51,14 @@ impl SpaceObject {
     }
 
     /// Creates a new space object describing a celestial body, non-controllable and not a ship.
-    pub fn body(position: Vec2, velocity: Vec2, mass: f32, size: f32, image: Image) -> Self {
+    pub fn body(position: Vec2, velocity: Vec2, mass: f32, size: f32, image: &Image) -> Self {
         Self {
             position,
             velocity,
             angle: 0.0,
             mass,
             size,
-            sprite: image,
+            sprite: Texture2D::from_image(image),
             ship: None,
             collisions: None,
         }
@@ -83,9 +83,9 @@ impl SpaceObject {
         // Acceleration
         if is_key_down(ship_info.keymap[0]) {
             self.velocity += Vec2::new(self.angle.cos(), self.angle.sin()) * Self::LIN_ACCELARATION;
-            self.sprite = images[1].clone();
+            self.sprite = Texture2D::from_image(&images[1]);
         } else {
-            self.sprite = images[0].clone();
+            self.sprite = Texture2D::from_image(&images[0]);
         }
         // Turning
         if is_key_down(ship_info.keymap[1]) {
@@ -104,7 +104,7 @@ impl SpaceObject {
                     angle: self.angle,
                     mass: 0.01,
                     size: 4.0,
-                    sprite: images[2].clone(),
+                    sprite: Texture2D::from_image(&images[2]),
                     ship: None,
                     collisions: Some(1),
                 });
@@ -118,8 +118,9 @@ impl SpaceObject {
 
     /// Draws the object to its position on the screen.
     pub fn draw(&self) {
+        self.sprite.set_filter(FilterMode::Nearest);
         draw_texture_ex(
-            &Texture2D::from_image(&self.sprite),
+            &self.sprite,
             self.position.x - self.size / 2.,
             self.position.y - self.size / 2.,
             WHITE,

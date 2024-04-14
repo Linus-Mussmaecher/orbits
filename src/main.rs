@@ -23,8 +23,8 @@ async fn main() {
 struct OrbitsInstance {
     /// All objects being simulated.
     objects: Vec<SpaceObject>,
-    /// The current scale of the camera.
-    scale: f32,
+    /// The current camera.
+    camera: Camera2D,
     /// Selection of cached images.
     image_cache: Vec<Image>,
 }
@@ -63,13 +63,13 @@ impl OrbitsInstance {
                 SpaceObject::ship(
                     Vec2::new(256.0, 0.0),
                     Vec2::new(0.0, 0.6),
-                    image_cache[0].clone(),
+                    &image_cache[0],
                     [KeyCode::W, KeyCode::A, KeyCode::D, KeyCode::S],
                 ),
                 SpaceObject::ship(
                     Vec2::new(-256.0, 0.0),
                     Vec2::new(0.0, -0.6),
-                    image_cache[0].clone(),
+                    &image_cache[0],
                     [KeyCode::I, KeyCode::J, KeyCode::L, KeyCode::K],
                 ),
                 // Sun
@@ -78,10 +78,10 @@ impl OrbitsInstance {
                     Vec2::new(0.0, 0.0),
                     1024.,
                     96.,
-                    image_cache[3].clone(),
+                    &image_cache[3],
                 ),
             ],
-            scale: 1.0,
+            camera: Camera2D::default(),
             image_cache,
         })
     }
@@ -154,8 +154,10 @@ impl OrbitsInstance {
         }
 
         // Delete all objects too far from the origin
-        self.objects
-            .retain(|object| object.get_position().length() <= 1000. && object.collisions_left())
+        self.objects.retain(|object| {
+            (object.get_position().length() <= 1000. || object.is_ship())
+                && object.collisions_left()
+        })
     }
 
     /// Draws the current state to the screen.
@@ -163,22 +165,29 @@ impl OrbitsInstance {
         // Clear the current frame
         clear_background(BLACK);
 
+        // Draw UI
+
+        set_default_camera();
+        draw_text("Ship 1", 0., 20., 12., WHITE);
+
+        // Draw simulation
+
         let (w, h) = (screen_width(), screen_height());
 
-        self.scale = 0.5;
+        let mut scale: f32 = 0.5;
 
         for object in self.objects.iter().filter(|obj| obj.is_ship()) {
-            let w_scale = object.get_position().x.abs() / w * 2.0;
-            let h_scale = object.get_position().y.abs() / h * 2.0;
+            // 2.2 to leave some padding
+            let w_scale = object.get_position().x.abs() / w * 2.2;
+            let h_scale = object.get_position().y.abs() / h * 2.2;
 
-            self.scale = self.scale.max(w_scale).max(h_scale);
+            scale = scale.max(w_scale).max(h_scale);
         }
 
-        set_camera(&Camera2D {
-            target: Vec2::new(0.0, 0.0),
-            zoom: Vec2::new(1. / w, 1. / h) / self.scale * 1.5,
-            ..Default::default()
-        });
+        // Camera is -1 to 1, so width and height 2. Correct by that and the reciprocal of screen width.
+        self.camera.zoom = Vec2::new(1. / w, 1. / h) / scale * 2.0;
+
+        set_camera(&self.camera);
 
         for object in self.objects.iter() {
             object.draw();
